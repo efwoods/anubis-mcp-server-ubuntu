@@ -1,1 +1,2 @@
 ipykernel
+langchain_mcp_adapters
