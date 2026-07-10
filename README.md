@@ -1,36 +1,137 @@
-# anubis-mcp-server-ubuntu
+# NeuralNexus MCP (Ubuntu)
 
-Local Model Context Protocol server for NeuralNexus. Exposes folders on a user's machine and connects to `api.neuralnexus.site` through an **outbound relay** — no Cloudflare account, port forwarding, or inbound firewall rules.
+Share folders on your Ubuntu machine with [NeuralNexus](https://neuralnexus.site) to allow your Avatar to read and analyze your local files from your Desktop! Have on demand health analytics from Apple Health! Learn detailed insights in seconds! Receive alerts and notifications based on this health data in the future!
 
-## One-click install
+This app runs a small **Model Context Protocol (MCP)** server on your computer and connects to `api.neuralnexus.site` over an **outbound** connection. You do **not** need:
+
+- a Cloudflare account
+- port forwarding
+- inbound firewall rules
+- a public IP
+
+Your files stay on your machine. The API reaches them only through the secure relay you open outward.
+
+---
+
+## Who this is for
+
+| Audience | What you get |
+|----------|----------------|
+| **Users** | One-command install, pick a folder, leave it running in the background |
+| **Developers** | Local MCP + relay against production or a local Anubis API |
+
+---
+
+## Requirements
+
+- Ubuntu (or similar Linux with **systemd**)
+- **Python 3.11+**
+- A NeuralNexus account and API key (`sk-...`) from Account settings [Signup Here](https://api.neuralnexus.site/docs#POST/signup)
+- Network access to `api.neuralnexus.site` (HTTPS / WSS)
+
+---
+
+## Quick start (users)
+
+### 1. Get the project
+
+```bash
+git clone <this-repo-url>
+cd anubis-mcp-server-ubuntu
+```
+
+### 2. Install
 
 ```bash
 ./neuralnexus-mcp.sh install
 ```
 
-Or directly:
+On first launch you will be asked for:
+
+1. **API key** — your NeuralNexus `sk-...` key  
+2. **Folder to share** — a directory the AI may read (a sensible default is suggested when available, e.g. Health Auto Export data)
+
+### 3. Confirm it is running
+
+```bash
+./neuralnexus-mcp.sh status
+```
+
+That is it. The daemon:
+
+- listens on `127.0.0.1` only (not exposed to the internet)
+- opens an outbound WebSocket to `wss://api.neuralnexus.site/mcp/relay`
+- registers with NeuralNexus using your API key
+- proxies tool calls from the API to your local MCP server
+
+After install it runs as a **systemd user service** (`neuralnexus-mcp.service`) and starts when you login.
+
+---
+
+## Day-to-day commands
+
+Run with no arguments for an interactive menu:
+
+```bash
+./neuralnexus-mcp.sh
+```
+
+Or use commands directly:
+
+| Command | What it does |
+|---------|----------------|
+| `./neuralnexus-mcp.sh install` | Install dependencies, first-time setup, enable the service |
+| `./neuralnexus-mcp.sh start` | Start the service |
+| `./neuralnexus-mcp.sh stop` | Stop the service |
+| `./neuralnexus-mczp.sh status` | Show service and config status |
+| `./neuralnexus-mcp.sh logs` | Follow live logs |
+| `./neuralnexus-mcp.sh uninstall` | Remove the systemd service |
+| `./neuralnexus-mcp.sh uninstall --purge` | Also remove `.venv` and saved config |
+
+Equivalent scripts:
 
 ```bash
 ./scripts/install.sh
+./scripts/stop.sh
+./scripts/uninstall.sh
+./scripts/uninstall.sh --purge
 ```
 
-On first launch you will be asked for:
+### Logs
 
-1. **API key** — your NeuralNexus `sk-...` key from Account settings
-2. **Folder to share** — defaults to a sensible path when available (e.g. Health Auto Export data)
+```bash
+./neuralnexus-mcp.sh logs
+# or
+journalctl --user -u neuralnexus-mcp.service -f
+```
 
-The daemon then:
+### Keep running after logout
 
-- runs MCP on `127.0.0.1` only (not exposed to the internet)
-- opens an outbound WebSocket to `wss://api.neuralnexus.site/mcp/relay`
-- registers presence with `POST /mcp/register` using your `API-KEY`
-- proxies API tool calls to the local MCP server over that connection
+User services stop and restart when you logout/login. To keep MCP running after logout, run the following command:
 
-No Cloudflare or router configuration is required.
+```bash
+loginctl enable-linger $USER
+```
 
-### Non-interactive install
+### Change settings later
 
-For scripted installs, set environment variables before running:
+```bash
+# Activate the venv first if needed
+source .venv/bin/activate
+
+python -m src.daemon configure --watch /path/to/another/folder
+python -m src.daemon status
+python -m src.daemon login --api-key sk-...
+```
+
+Config lives in `~/.config/neuralnexus-mcp/`.  
+Optional production overrides can go in `.env` at the repo root (see `.env.example`).
+
+---
+
+## Non-interactive / scripted install
+
+Useful for automation or headless machines:
 
 ```bash
 export NEURALNEXUS_API_KEY=sk-...
@@ -41,81 +142,126 @@ export NEURALNEXUS_WATCH_FOLDER="/path/to/your/data"
 Or:
 
 ```bash
-python -m src.daemon setup --non-interactive --api-key sk-... --watch /path/to/data --start
+source .venv/bin/activate   # after deps are installed
+python -m src.daemon setup --non-interactive \
+  --api-key sk-... \
+  --watch /path/to/data \
+  --start
 ```
 
-## Commands
+---
 
-| Command | Purpose |
-|---------|---------|
-| `./neuralnexus-mcp.sh` | Interactive menu (install, start, stop, status, logs, uninstall) |
-| `./neuralnexus-mcp.sh install` | Install dependencies, run first-time setup, enable systemd service |
-| `./scripts/install.sh` | Same as install command above |
-| `./scripts/stop.sh` | Stop the background service (SIGTERM) |
-| `./scripts/uninstall.sh` | Disable and remove the systemd service |
-| `./scripts/uninstall.sh --purge` | Also remove `.venv` and config |
-| `python -m src.daemon setup` | Interactive first-time configuration |
-| `python -m src.daemon start` | Run MCP + outbound relay in the foreground |
-| `python -m src.daemon status` | Show saved configuration |
-| `python -m src.daemon configure` | Change settings later |
+## How it works (simple picture)
 
-After install, the daemon runs as a **systemd user service** (`neuralnexus-mcp.service`) and starts on login.
-
-```bash
-./neuralnexus-mcp.sh status
-./neuralnexus-mcp.sh logs
-journalctl --user -u neuralnexus-mcp.service -f
+```
+Your PC                         NeuralNexus API
+┌─────────────────────┐         ┌──────────────────────┐
+│ Local MCP (127.0.0.1)│◄───────│  Outbound WebSocket  │
+│ Shared folder(s)     │  relay │  api.neuralnexus.site │
+└─────────────────────┘         └──────────────────────┘
+         ▲
+         │ only localhost
+         │ (not open to the internet)
 ```
 
-To keep the service running after logout:
+1. You choose which folder(s) to share.  
+2. MCP serves tools over HTTP on localhost.  
+3. The daemon keeps an outbound relay open to the API.  
+4. When NeuralNexus needs your files, the API sends requests through that relay only.
 
-```bash
-loginctl enable-linger $USER
-```
-
-Config is stored in `~/.config/neuralnexus-mcp/`. Optional production overrides can go in `.env` at the repo root (loaded by the systemd unit).
-
-### Local development (Anubis test server)
-
-Dev mode is separate from production: different systemd unit, config directory, port, and env file. It does not modify `.env`.
-
-```bash
-cp .env.dev.example .env.dev
-# edit .env.dev — default API is http://localhost:8123, MCP port 9990
-./scripts/dev.sh start
-./scripts/dev.sh status
-./scripts/dev.sh logs
-./scripts/dev.sh stop
-```
-
-Production (`./neuralnexus-mcp.sh`) and dev (`./scripts/dev.sh`) can run at the same time without conflicting.
-
-## Connection modes
+### Connection modes (Developer Instructions)
 
 | Mode | When to use |
 |------|-------------|
-| `relay` (default) | Normal users — outbound WebSocket only |
+| `relay` (default option) | Normal use — outbound WebSocket only |
 | `local` | Development on the same machine as the API |
 | `tunnel` | Advanced — optional Cloudflare tunnel if you already use one |
 
 Switch modes:
 
 ```bash
+source .venv/bin/activate
 python -m src.daemon configure --connection-mode tunnel --tunnel-mode auto
 ```
 
-## API contract (Anubis side)
+The `relay` option automatically works without configuration.
 
-The local daemon expects these API endpoints:
+---
+
+## Local development (developers)
+
+Dev mode is **separate** from production: different systemd unit, config directory, port, and env file. It does **not** modify production `.env` or `~/.config/neuralnexus-mcp/`.
+
+Production and dev can run at the same time.
+
+### Setup
+
+```bash
+cp .env.dev.example .env.dev
+# Edit .env.dev — defaults point at a local Anubis API
+```
+
+Defaults in `.env.dev.example`:
+
+| Setting | Default |
+|---------|---------|
+| API | `http://localhost:8123` |
+| MCP port | `9990` |
+| Config dir | `~/.config/neuralnexus-mcp-dev` |
+| Service | `neuralnexus-mcp-dev.service` |
+
+Optional non-interactive keys in `.env.dev`:
+
+```bash
+# NEURALNEXUS_API_KEY=sk-...
+# NEURALNEXUS_WATCH_FOLDER=/path/to/test/data
+```
+
+### Development helper scripts:
+
+```bash
+./scripts/dev.sh start
+./scripts/dev.sh status
+./scripts/dev.sh logs
+./scripts/dev.sh stop
+./scripts/dev.sh restart
+```
+
+### Foreground MCP only (no daemon / relay)
+
+```bash
+source .venv/bin/activate
+MCP_REQUIRE_DEVICE_AUTH=false python -m src.server.app
+```
+
+For full daemon + relay against a local Anubis instance, prefer `./scripts/dev.sh`.
+
+### Daemon CLI (advanced)
+
+```bash
+source .venv/bin/activate
+
+python -m src.daemon setup          # interactive first-time config
+python -m src.daemon start          # MCP + relay in the foreground
+python -m src.daemon status
+python -m src.daemon configure
+python -m src.daemon login
+```
+
+---
+
+## API contract (Anubis / backend developers)
+
+The local daemon expects these endpoints on the API:
 
 | Endpoint | Purpose |
 |----------|---------|
 | `WSS /mcp/relay` | Outbound relay; API sends `proxy` messages, daemon returns `proxy_response` |
-| `POST /mcp/register` | HTTP registration fallback / pending consent |
-| `POST /mcp/heartbeat` | Keep-alive every 30s |
+| `POST /mcp/register` | HTTP registration / pending consent |
+| `POST /mcp/heartbeat` | Keep-alive (every ~30s) |
 | `POST /mcp/unregister` | Clean shutdown |
 
-Relay registration message (WebSocket):
+### Relay registration (WebSocket)
 
 ```json
 {
@@ -130,7 +276,7 @@ Relay registration message (WebSocket):
 }
 ```
 
-HTTP registration (`connection_mode: relay`):
+### HTTP registration (`connection_mode: relay`)
 
 ```json
 {
@@ -144,18 +290,55 @@ HTTP registration (`connection_mode: relay`):
 }
 ```
 
-## Local development (foreground, no daemon)
+---
 
-Run MCP without the daemon:
+## Uninstall
 
 ```bash
-source .venv/bin/activate
-MCP_REQUIRE_DEVICE_AUTH=false python -m src.server.app
+# Remove the service only (keep venv + config)
+./neuralnexus-mcp.sh uninstall
+
+# Remove service, virtualenv, and config
+./neuralnexus-mcp.sh uninstall --purge
 ```
 
-For full daemon + relay testing against a local Anubis instance, use `./scripts/dev.sh` (see above).
+Dev service (if you used it):
 
-## Resources
+```bash
+./scripts/dev.sh stop
+# then remove the unit if needed via the same uninstall flow after switching context,
+# or: systemctl --user disable --now neuralnexus-mcp-dev.service
+```
 
-- https://docs.langchain.com/oss/python/langchain/mcp
-- https://gofastmcp.com/getting-started/quickstart
+---
+
+## Troubleshooting
+
+| Problem | What to try |
+|---------|-------------|
+| Install asks for API key / folder every time | Check that `~/.config/neuralnexus-mcp/` was written and is readable |
+| Service will not start | `./neuralnexus-mcp.sh status` and `./neuralnexus-mcp.sh logs` |
+| `systemctl --user` errors | Ensure you are logged in and `$XDG_RUNTIME_DIR` is set |
+| Stops after logout | `loginctl enable-linger $USER` |
+| Dev vs prod confusion | Prod: `./neuralnexus-mcp.sh` + `.env` + `~/.config/neuralnexus-mcp/` · Dev: `./scripts/dev.sh` + `.env.dev` + `~/.config/neuralnexus-mcp-dev/` |
+| Python missing | Install Python 3.11+ and re-run install |
+
+---
+
+## Project layout (high overview)
+
+```
+neuralnexus-mcp.sh     # Main user entrypoint (menu + commands)
+scripts/               # install, stop, uninstall, dev helpers
+src/daemon/            # Setup, relay, registration, systemd lifecycle
+src/server/            # Local MCP HTTP server
+.env.example           # Optional production overrides
+.env.dev.example       # Local Anubis / dev template
+```
+
+---
+
+## Reference Documentation
+
+- [LangChain MCP docs](https://docs.langchain.com/oss/python/langchain/mcp)
+- [FastMCP quickstart](https://gofastmcp.com/getting-started/quickstart)
