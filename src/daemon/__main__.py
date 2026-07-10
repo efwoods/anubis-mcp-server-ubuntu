@@ -275,7 +275,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     credentials = Credentials.load()
     if credentials is None:
         print(
-            "No API key found. Run `./install.sh` or `python -m src.daemon setup`.",
+            "No API key found. Run `./scripts/install.sh` or `python -m src.daemon setup`.",
             file=sys.stderr,
         )
         return 1

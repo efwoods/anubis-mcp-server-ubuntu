@@ -5,7 +5,13 @@ Local Model Context Protocol server for NeuralNexus. Exposes folders on a user's
 ## One-click install
 
 ```bash
-./install.sh
+./neuralnexus-mcp.sh install
+```
+
+Or directly:
+
+```bash
+./scripts/install.sh
 ```
 
 On first launch you will be asked for:
@@ -29,7 +35,7 @@ For scripted installs, set environment variables before running:
 ```bash
 export NEURALNEXUS_API_KEY=sk-...
 export NEURALNEXUS_WATCH_FOLDER="/path/to/your/data"
-./install.sh
+./scripts/install.sh
 ```
 
 Or:
@@ -42,13 +48,47 @@ python -m src.daemon setup --non-interactive --api-key sk-... --watch /path/to/d
 
 | Command | Purpose |
 |---------|---------|
-| `./install.sh` | Install dependencies and start (runs setup on first launch) |
+| `./neuralnexus-mcp.sh` | Interactive menu (install, start, stop, status, logs, uninstall) |
+| `./neuralnexus-mcp.sh install` | Install dependencies, run first-time setup, enable systemd service |
+| `./scripts/install.sh` | Same as install command above |
+| `./scripts/stop.sh` | Stop the background service (SIGTERM) |
+| `./scripts/uninstall.sh` | Disable and remove the systemd service |
+| `./scripts/uninstall.sh --purge` | Also remove `.venv` and config |
 | `python -m src.daemon setup` | Interactive first-time configuration |
-| `python -m src.daemon start` | Run MCP + outbound relay |
+| `python -m src.daemon start` | Run MCP + outbound relay in the foreground |
 | `python -m src.daemon status` | Show saved configuration |
 | `python -m src.daemon configure` | Change settings later |
 
-Config is stored in `~/.config/neuralnexus-mcp/`.
+After install, the daemon runs as a **systemd user service** (`neuralnexus-mcp.service`) and starts on login.
+
+```bash
+./neuralnexus-mcp.sh status
+./neuralnexus-mcp.sh logs
+journalctl --user -u neuralnexus-mcp.service -f
+```
+
+To keep the service running after logout:
+
+```bash
+loginctl enable-linger $USER
+```
+
+Config is stored in `~/.config/neuralnexus-mcp/`. Optional production overrides can go in `.env` at the repo root (loaded by the systemd unit).
+
+### Local development (Anubis test server)
+
+Dev mode is separate from production: different systemd unit, config directory, port, and env file. It does not modify `.env`.
+
+```bash
+cp .env.dev.example .env.dev
+# edit .env.dev — default API is http://localhost:8123, MCP port 9990
+./scripts/dev.sh start
+./scripts/dev.sh status
+./scripts/dev.sh logs
+./scripts/dev.sh stop
+```
+
+Production (`./neuralnexus-mcp.sh`) and dev (`./scripts/dev.sh`) can run at the same time without conflicting.
 
 ## Connection modes
 
@@ -104,7 +144,7 @@ HTTP registration (`connection_mode: relay`):
 }
 ```
 
-## Local development
+## Local development (foreground, no daemon)
 
 Run MCP without the daemon:
 
@@ -112,6 +152,8 @@ Run MCP without the daemon:
 source .venv/bin/activate
 MCP_REQUIRE_DEVICE_AUTH=false python -m src.server.app
 ```
+
+For full daemon + relay testing against a local Anubis instance, use `./scripts/dev.sh` (see above).
 
 ## Resources
 

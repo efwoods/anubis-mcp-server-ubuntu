@@ -3,7 +3,7 @@
 ## One-click install
 
 ```bash
-./install.sh
+./neuralnexus-mcp.sh install
 ```
 
 Follow-up questions on first run only:
