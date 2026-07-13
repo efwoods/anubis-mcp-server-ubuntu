@@ -76,9 +76,12 @@ def cmd_configure(args: argparse.Namespace) -> int:
         config.local_port = args.port
     if args.watch:
         config.set_watched_roots(args.watch)
-    elif args.add_watch:
+    if args.add_watch:
         for root in args.add_watch:
             config.add_watched_root(root)
+    if args.remove_watch:
+        for root in args.remove_watch:
+            config.remove_watched_root(root)
     config.save()
     print("Configuration updated:")
     for key, value in config.to_public_dict().items():
@@ -335,6 +338,9 @@ def build_parser() -> argparse.ArgumentParser:
     configure.add_argument("--port", type=int, help="Local MCP HTTP port")
     configure.add_argument("--watch", nargs="+", help="Replace watched folders")
     configure.add_argument("--add-watch", nargs="+", help="Append watched folders")
+    configure.add_argument(
+        "--remove-watch", nargs="+", help="Remove watched folders"
+    )
     configure.set_defaults(func=cmd_configure)
 
     status = subparsers.add_parser("status", help="Show saved configuration")

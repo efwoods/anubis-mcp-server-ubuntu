@@ -113,13 +113,29 @@ User services stop and restart when you logout/login. To keep MCP running after 
 loginctl enable-linger $USER
 ```
 
+### Share more folders
+
+You can share any number of folders. The easiest way is the manager script,
+which updates the config and restarts the service for you:
+
+```bash
+./neuralnexus-mcp.sh folders                          # list shared folders
+./neuralnexus-mcp.sh add-folder ~/Documents ~/Downloads
+./neuralnexus-mcp.sh remove-folder ~/Downloads
+```
+
+The same options are available under "Shared folders" in the interactive menu
+(`./neuralnexus-mcp.sh`).
+
 ### Change settings later
 
 ```bash
 # Activate the venv first if needed
 source .venv/bin/activate
 
-python -m src.daemon configure --watch /path/to/another/folder
+python -m src.daemon configure --watch /replace/all/folders
+python -m src.daemon configure --add-watch /path/to/another/folder
+python -m src.daemon configure --remove-watch /path/to/another/folder
 python -m src.daemon status
 python -m src.daemon login --api-key sk-...
 ```

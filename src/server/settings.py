@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+DEFAULT_WATCHED_ROOT = "/home/user/Documents/Health Auto Export/health_metric_data"
+
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -16,12 +18,38 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def resolve_watched_roots(root_entries: list[str] | tuple[str, ...]) -> tuple[Path, ...]:
+    """Expand and resolve folder paths, dropping blanks and duplicates."""
+    resolved_roots: list[Path] = []
+    for entry in root_entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+        path = Path(entry).expanduser().resolve()
+        if path not in resolved_roots:
+            resolved_roots.append(path)
+    return tuple(resolved_roots)
+
+
+def _watched_roots_from_env() -> tuple[Path, ...]:
+    """Read watched folders from MCP_WATCHED_ROOTS (colon-separated), falling
+    back to the legacy single-folder HEALTH_DATA_DIR."""
+    watched_roots_value = os.getenv("MCP_WATCHED_ROOTS")
+    if watched_roots_value:
+        roots = resolve_watched_roots(watched_roots_value.split(os.pathsep))
+        if roots:
+            return roots
+    return resolve_watched_roots(
+        [os.getenv("HEALTH_DATA_DIR", DEFAULT_WATCHED_ROOT)]
+    )
+
+
 @dataclass(frozen=True)
 class ServerSettings:
     host: str
     port: int
     mcp_path: str
-    health_data_dir: Path
+    watched_roots: tuple[Path, ...]
     server_name: str
     device_secret: str | None
     public_base_url: str | None
@@ -29,17 +57,11 @@ class ServerSettings:
 
     @classmethod
     def from_env(cls, *, device_secret: str | None = None) -> ServerSettings:
-        health_root = Path(
-            os.getenv(
-                "HEALTH_DATA_DIR",
-                "/home/user/Documents/Health Auto Export/health_metric_data",
-            )
-        ).resolve()
         return cls(
             host=os.getenv("MCP_HOST", "127.0.0.1"),
             port=int(os.getenv("PORT", os.getenv("MCP_PORT", "8000"))),
             mcp_path=os.getenv("MCP_PATH", "/mcp"),
-            health_data_dir=health_root,
+            watched_roots=_watched_roots_from_env(),
             server_name=os.getenv("MCP_SERVER_NAME", "Ubuntu-OS-Filesystem"),
             device_secret=device_secret or os.getenv("MCP_DEVICE_SECRET"),
             public_base_url=os.getenv("PUBLIC_BASE_URL"),
@@ -48,7 +70,7 @@ class ServerSettings:
 
     @property
     def allowed_roots(self) -> tuple[Path, ...]:
-        return (self.health_data_dir,)
+        return self.watched_roots
 
     def local_mcp_url(self) -> str:
         return f"http://{self.host}:{self.port}{self.mcp_path}"

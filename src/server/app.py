@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from sse_starlette.sse import EventSourceResponse
 
-from src.server.settings import ServerSettings
+from src.server.settings import ServerSettings, resolve_watched_roots
 
 MCP_TRANSPORT = "streamable_http"
 
@@ -162,13 +162,22 @@ def create_mcp_server(
             results.append({**info, "content_b64": content_b64})
         return results
 
+    used_resource_names: set[str] = set()
     for root in allowed_roots:
         if root.is_dir():
+            resource_name = root.name
+            if resource_name in used_resource_names:
+                resource_name = f"{root.parent.name}-{root.name}"
+            suffix = 2
+            while resource_name in used_resource_names:
+                resource_name = f"{root.name}-{suffix}"
+                suffix += 1
+            used_resource_names.add(resource_name)
             mcp.add_resource(
                 DirectoryResource(
-                    uri=f"health://files/{root.name}",
+                    uri=f"health://files/{resource_name}",
                     path=root,
-                    name=f"Watched Files ({root.name})",
+                    name=f"Watched Files ({resource_name})",
                     description=f"List files under {root}.",
                     recursive=True,
                 )
@@ -225,13 +234,16 @@ def build_server_settings(
     require_device_auth: bool | None = None,
 ) -> ServerSettings:
     settings = ServerSettings.from_env(device_secret=device_secret)
-    roots = watched_roots or [str(root) for root in settings.allowed_roots]
-    primary_root = Path(roots[0]).expanduser().resolve() if roots else settings.health_data_dir
+    resolved_roots = (
+        resolve_watched_roots(watched_roots)
+        if watched_roots
+        else settings.watched_roots
+    )
     return ServerSettings(
         host=settings.host,
         port=port or settings.port,
         mcp_path=settings.mcp_path,
-        health_data_dir=primary_root,
+        watched_roots=resolved_roots,
         server_name=settings.server_name,
         device_secret=device_secret or settings.device_secret,
         public_base_url=public_base_url or settings.public_base_url,

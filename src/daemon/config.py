@@ -114,6 +114,12 @@ class DaemonConfig:
             self.watched_roots.append(resolved)
             self.save()
 
+    def remove_watched_root(self, root: str) -> None:
+        resolved = str(Path(root).expanduser().resolve())
+        if resolved in self.watched_roots:
+            self.watched_roots.remove(resolved)
+            self.save()
+
     def primary_watch_root(self) -> str | None:
         return self.watched_roots[0] if self.watched_roots else None
 
